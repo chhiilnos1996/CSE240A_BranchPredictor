@@ -8,12 +8,12 @@
 # choice predictor 2^l*2
 # 32 Kbits
 
-for l in range(10, 14):
-    for k in range(5, 14):
-        for m in range(5, 14):
+for k in range(5, 14):
+    for m in range(5, 14):
+        for l in range(10, 14):
             result = pow(2,l+2)+pow(2,m+1)+m*pow(2,k)
             if result<=pow(2,15):
-              print(m,k,l)
+              print(k,m,l)
 
 #k'<k or m'<m or l'<l
 
