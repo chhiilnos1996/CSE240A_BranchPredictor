@@ -51,9 +51,9 @@ uint8_t *bht_gshare;
 uint64_t ghistory;
 
 //tournament
-uint32_t *local_pht_tour; // branch pattern history table
-uint8_t *local_bht_tour; // branch history table for branch pattern
-uint8_t *global_bht_tour; // global history table for branch pattern
+uint32_t *local_bht_tour; // local history table indexed by PC
+uint8_t *local_pht_tour; // pattern history table for branch 
+uint8_t *global_pht_tour; // pattern history table for global
 uint8_t *choice_predictor_tour; // chooser
 uint32_t ghistory_tour; // global history register
 
@@ -139,23 +139,23 @@ void cleanup_perceptron(){
 // tournament functions
 void init_tournament() {
     //printf("init_tournament\n");
-    uint32_t pht_entries = 1 << pcBits_tour;
-    uint32_t local_bht_entries = 1 << lhistoryBits_tour;
-    uint32_t global_bht_entries = 1 << ghistoryBits_tour;
+    uint32_t local_bht_entries = 1 << pcBits_tour;
+    uint32_t local_pht_entries = 1 << lhistoryBits_tour;
+    uint32_t global_pht_entries = 1 << ghistoryBits_tour;
     
-    local_pht_tour = (uint32_t*)malloc(pht_entries * sizeof(uint32_t));
-    local_bht_tour = (uint8_t*)malloc(local_bht_entries * sizeof(uint8_t));
-    global_bht_tour = (uint8_t*)malloc(global_bht_entries * sizeof(uint8_t));
-    choice_predictor_tour = (uint8_t*)malloc(global_bht_entries * sizeof(uint8_t));
+    local_bht_tour = (uint32_t*)malloc(local_bht_entries * sizeof(uint32_t));
+    local_pht_tour = (uint8_t*)malloc(local_pht_entries * sizeof(uint8_t));
+    global_pht_tour = (uint8_t*)malloc(global_pht_entries * sizeof(uint8_t));
+    choice_predictor_tour = (uint8_t*)malloc(global_pht_entries * sizeof(uint8_t));
     
-    for(int i = 0; i< pht_entries; i++){
+    for(int i = 0; i< local_bht_entries; i++){
+        local_bht_tour[i] = 0;
+    }
+    for(int i = 0; i< local_pht_entries; i++){
         local_pht_tour[i] = WN;
     }
-    for(int i = 0; i< local_bht_entries; i++){
-        local_bht_tour[i] = WN;
-    }
-    for(int i = 0; i< global_bht_entries; i++){
-        global_bht_tour[i] = WN;
+    for(int i = 0; i< global_pht_entries; i++){
+        global_pht_tour[i] = WN;
         choice_predictor_tour[i] = WN;
     }
     ghistory_tour = 0;
@@ -164,19 +164,19 @@ void init_tournament() {
 uint8_t tournament_predict(uint32_t pc) {
   //printf("tournament_predict\n"); fflush(stdout);
   //get lower ghistoryBits of pc
-  uint32_t pht_entries = 1 << pcBits_tour;
-  uint32_t global_bht_entries = 1 << ghistoryBits_tour;
+  uint32_t local_bht_entries = 1 << pcBits_tour;
+  uint32_t global_pht_entries = 1 << ghistoryBits_tour;
   
-  uint32_t pc_lower_bits = pc & (pht_entries-1);
-  uint32_t local_bht_index = local_pht_tour[pc_lower_bits];
-  uint32_t global_bht_index = ghistory_tour & (global_bht_entries-1);
+  uint32_t pc_lower_bits = pc & (local_bht_entries-1);
+  uint32_t local_pht_index = local_bht_tour[pc_lower_bits];
+  uint32_t global_pht_index = ghistory_tour & (global_pht_entries-1);
   //-----------------------------------------------------------------
   //local & global prediction
-  uint8_t local_prediction = local_bht_tour[local_bht_index]/2;
-  uint8_t global_prediction = global_bht_tour[global_bht_index]/2;
-  /*printf("local_bht_index = %d\n", local_bht_index);
+  uint8_t local_prediction = local_pht_tour[local_pht_index]/2;
+  uint8_t global_prediction = global_pht_tour[global_pht_index]/2;
+  /*printf("local_pht_index = %d\n", local_pht_index);
     printf("local_prediction = %d\n", local_prediction);
-    printf("gocal_bht_index = %d\n", global_bht_index);
+    printf("gocal_pht_index = %d\n", global_pht_index);
     printf("global_prediction = %d\n", global_prediction);
     fflush(stdout);*/
   //-----------------------------------------------------------------
@@ -184,7 +184,7 @@ uint8_t tournament_predict(uint32_t pc) {
   if (local_prediction == global_prediction) return local_prediction;
 
   //predictions doesn't match
-  switch(choice_predictor_tour[global_bht_index]){
+  switch(choice_predictor_tour[global_pht_index]){
     case WN: // 01 local
           return local_prediction;
     case SN: // 00 local
@@ -203,50 +203,50 @@ void train_tournament(uint32_t pc, uint8_t outcome) {
     //printf("train_tournament\n");
     //-----------------------------------------------------------------
     //get lower ghistoryBits of pc
-    uint32_t pht_entries = 1 << pcBits_tour;
-    uint32_t local_bht_entries = 1 << lhistoryBits_tour;
-    uint32_t global_bht_entries = 1 << ghistoryBits_tour;
+    uint32_t local_bht_entries = 1 << pcBits_tour;
+    uint32_t local_pht_entries = 1 << lhistoryBits_tour;
+    uint32_t global_pht_entries = 1 << ghistoryBits_tour;
     
-    uint32_t pc_lower_bits = pc & (pht_entries-1);
-    uint32_t local_bht_index = local_pht_tour[pc_lower_bits];
-    uint32_t global_bht_index = ghistory_tour & (global_bht_entries-1);
+    uint32_t pc_lower_bits = pc & (local_bht_entries-1);
+    uint32_t local_pht_index = local_bht_tour[pc_lower_bits];
+    uint32_t global_pht_index = ghistory_tour & (global_pht_entries-1);
     //-----------------------------------------------------------------
     //local & global prediction
-    uint8_t local_prediction = local_bht_tour[local_bht_index]/2;
-    uint8_t global_prediction = global_bht_tour[global_bht_index]/2;
+    uint8_t local_prediction = local_pht_tour[local_pht_index]/2;
+    uint8_t global_prediction = global_pht_tour[global_pht_index]/2;
     //-----------------------------------------------------------------
-    //Update local_pht and local_bht
-    switch(local_bht_tour[local_bht_index]){
+    //Update local_bht and local_pht
+    switch(local_pht_tour[local_pht_index]){
       case WN:
-        local_bht_tour[local_bht_index] = (outcome==TAKEN)?WT:SN;
+        local_pht_tour[local_pht_index] = (outcome==TAKEN)?WT:SN;
         break;
       case SN:
-        local_bht_tour[local_bht_index] = (outcome==TAKEN)?WN:SN;
+        local_pht_tour[local_pht_index] = (outcome==TAKEN)?WN:SN;
         break;
       case WT:
-        local_bht_tour[local_bht_index] = (outcome==TAKEN)?ST:WN;
+        local_pht_tour[local_pht_index] = (outcome==TAKEN)?ST:WN;
         break;
       case ST:
-        local_bht_tour[local_bht_index] = (outcome==TAKEN)?ST:WT;
+        local_pht_tour[local_pht_index] = (outcome==TAKEN)?ST:WT;
         break;
       default:
         printf("Warning: Undefined state of entry in TOURNAMENT LOCAL BHT!\n");
     }
-    local_pht_tour[pc_lower_bits] = ((local_bht_index << 1) | outcome) & (local_bht_entries-1);
+    local_bht_tour[pc_lower_bits] = ((local_pht_index << 1) | outcome) & (local_pht_entries-1);
 
-    //Update global_bht
-    switch(global_bht_tour[global_bht_index]){
+    //Update global_pht
+    switch(global_pht_tour[global_pht_index]){
       case WN:
-        global_bht_tour[global_bht_index] = (outcome==TAKEN)?WT:SN;
+        global_pht_tour[global_pht_index] = (outcome==TAKEN)?WT:SN;
         break;
       case SN:
-        global_bht_tour[global_bht_index] = (outcome==TAKEN)?WN:SN;
+        global_pht_tour[global_pht_index] = (outcome==TAKEN)?WN:SN;
         break;
       case WT:
-        global_bht_tour[global_bht_index] = (outcome==TAKEN)?ST:WN;
+        global_pht_tour[global_pht_index] = (outcome==TAKEN)?ST:WN;
         break;
       case ST:
-        global_bht_tour[global_bht_index] = (outcome==TAKEN)?ST:WT;
+        global_pht_tour[global_pht_index] = (outcome==TAKEN)?ST:WT;
         break;
       default:
         printf("Warning: Undefined state of entry in TOURNAMENT GLOBAL BHT!\n");
@@ -255,31 +255,31 @@ void train_tournament(uint32_t pc, uint8_t outcome) {
     //-----------------------------------------------------------------
     //Update chooser only when global and local predictor disagree
     if(local_prediction != global_prediction){
-        switch(choice_predictor_tour[global_bht_index]){
+        switch(choice_predictor_tour[global_pht_index]){
           case WN:
-            choice_predictor_tour[global_bht_index] = (outcome==global_prediction)?WT:SN;
+            choice_predictor_tour[global_pht_index] = (outcome==global_prediction)?WT:SN;
             break;
           case SN:
-            choice_predictor_tour[global_bht_index] = (outcome==global_prediction)?WN:SN;
+            choice_predictor_tour[global_pht_index] = (outcome==global_prediction)?WN:SN;
             break;
           case WT:
-            choice_predictor_tour[global_bht_index] = (outcome==global_prediction)?ST:WN;
+            choice_predictor_tour[global_pht_index] = (outcome==global_prediction)?ST:WN;
             break;
           case ST:
-            choice_predictor_tour[global_bht_index] = (outcome==global_prediction)?ST:WT;
+            choice_predictor_tour[global_pht_index] = (outcome==global_prediction)?ST:WT;
             break;
           default:
             printf("Warning: Undefined state of entry in TOURNAMENT GLOBAL BHT!\n");
         }
     }
     //Update history register
-    ghistory_tour = ((ghistory_tour << 1) | outcome) & (global_bht_entries-1);
+    ghistory_tour = ((ghistory_tour << 1) | outcome) & (global_pht_entries-1);
 }
 
 void cleanup_tournament() {
-    free(local_pht_tour);
     free(local_bht_tour);
-    free(global_bht_tour);
+    free(local_pht_tour);
+    free(global_pht_tour);
     free(choice_predictor_tour);
 }
 
